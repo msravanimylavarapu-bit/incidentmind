@@ -1,0 +1,46 @@
+services:
+  hindsight:
+    image: ghcr.io/vectorize-io/hindsight:latest
+    restart: unless-stopped
+    shm_size: 1gb
+    ports:
+      - "8888:8888"
+      - "9999:9999"
+    environment:
+      HINDSIGHT_API_LLM_PROVIDER: ${HINDSIGHT_API_LLM_PROVIDER:-openai}
+      HINDSIGHT_API_LLM_API_KEY: ${HINDSIGHT_API_LLM_API_KEY:-}
+      HINDSIGHT_API_LLM_MODEL: ${HINDSIGHT_API_LLM_MODEL:-gpt-4o-mini}
+      HINDSIGHT_API_LLM_BASE_URL: ${HINDSIGHT_API_LLM_BASE_URL:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - hindsight_data:/home/hindsight/.pg0
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8888/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+  api:
+    build: ./backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      HINDSIGHT_BASE_URL: ${HINDSIGHT_BASE_URL:-http://hindsight:8888}
+      DATABASE_URL: sqlite:////app/data/incidentmind.db
+    ports:
+      - "8000:8000"
+    volumes:
+      - app_data:/app/data
+    depends_on:
+      hindsight:
+        condition: service_healthy
+  web:
+    build: ./frontend
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    depends_on:
+      - api
+volumes:
+  hindsight_data:
+  app_data:
